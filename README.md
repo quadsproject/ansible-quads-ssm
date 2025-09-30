@@ -21,10 +21,12 @@ Fully automates the process of scheduling hosts on a QUADS server via its [self-
 ## Configuration
 
 > [!IMPORTANT]
-> You must configure `quads_config.yml` first
-Before running the playbook, you must edit the included `quads_config.yml` file in the same directory. This file stores your server and user details and other preferences.
+> You must configure `quads_config.yml` first for at least `quads_api_server`, `quads_username`, and `quads_password`
 
 ### Configuration Parameters
+
+> [!NOTE]
+> If it's your first time talking to a new QUADS server simply make up a password in `quads_config.yml` and use that going forward for that server.
 
 | Parameter          | Type          | Description                                                                                                                                                               |
 | ------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,7 +46,7 @@ quads_api_server: "quads.example.com"
 # User Details
 quads_username: "joe"
 quads_user_domain: "example.com"
-quads_password: "SomeSecurePassword123!"
+quads_password: "make_a_password_up"
 
 # Host Selection Preferences
 preferred_models:
