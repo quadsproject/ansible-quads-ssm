@@ -14,7 +14,11 @@ Fully automates the process of scheduling hosts on a QUADS server via its [self-
 ---
 ## Requirements
 
-* **Ansible**: Ensure Ansible is installed on the machine where you run the playbook.
+* **Ansible**: Ensure Ansible and community collections (e.g. `community.general.dict_kv`) are installed from where you are running it.
+```bash
+dnf install ansible ansible-core
+```
+
 * **QUADS Server Access**: You need network access to the QUADS API server and valid user credentials.
 
 ---
