@@ -57,6 +57,9 @@ preferred_models:
 ```
 ## Running the Playbook:
 
+> [!NOTE]
+> You must wrap `workload_name` description in single quotes like the below examples.
+
 ### Scheduling a single host
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'"
