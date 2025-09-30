@@ -8,6 +8,7 @@ Fully automates the process of scheduling hosts on a QUADS server via its [self-
 
 * Performs all self-service steps:  registration, login, host discovery and scheduling
 * Allows scheduling multiple hosts or passing additional cloud values e.g. `qinq: 1` or `nowipe`
+* Allows setting a host model preference order, or use `all` if you don't care
 * Generates your list of schedule hosts and login/authentication details locally
 
 ---
