@@ -55,19 +55,19 @@ preferred_models:
   - "r640"
 # preferred_models: "all"
 ```
-### Running the Playbook:
+## Running the Playbook:
 
-## Scheduling a single host
+### Scheduling a single host
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'"
 ```
 
-## Scheduling Three Hosts
+### Scheduling Three Hosts
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -e "num_hosts='3'"
 ```
 
-## Schedule a Host without Wiping the Disks
+### Schedule a Host without Wiping the Disks
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -e "wipe=false"
 ```
