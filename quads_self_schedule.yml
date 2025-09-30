@@ -1,0 +1,212 @@
+---
+- name: QUADS Self-Scheduling Workflow
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - quads_config.yml
+
+  pre_tasks:
+    - name: Ensure 'workload_name' is provided at runtime
+      ansible.builtin.assert:
+        that:
+          - workload_name is defined
+          - workload_name | length > 0
+        fail_msg: >-
+          Mandatory variable 'workload_name' was not provided.
+          Please run the playbook with '-e "workload_name=Your Description"'.
+      changed_when: false
+
+    - name: Get current time for timestamping output file
+      ansible.builtin.setup:
+        filter: ansible_date_time
+      changed_when: false
+
+  tasks:
+    - name: Set up API and user variables
+      ansible.builtin.set_fact:
+        quads_user_email: "{{ quads_username }}@{{ quads_user_domain }}"
+        base_api_url: "https://{{ quads_api_server }}/api/v3"
+      changed_when: false
+
+    - name: Register user with QUADS server
+      no_log: true
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/register"
+        method: POST
+        body_format: json
+        body:
+          email: "{{ quads_user_email }}"
+          password: "{{ quads_password }}"
+        validate_certs: false
+        status_code: [200, 201, 409, 401]
+
+    - name: Log in and handle authentication errors
+      block:
+        - name: Attempt to log in and retrieve authentication token
+          no_log: true
+          ansible.builtin.uri:
+            url: "{{ base_api_url }}/login/"
+            method: POST
+            url_username: "{{ quads_user_email }}"
+            url_password: "{{ quads_password }}"
+            validate_certs: false
+            status_code: 200
+          register: login_result
+      rescue:
+        - name: Provide a clear error message for login failure
+          ansible.builtin.fail:
+            msg: >-
+              Login failed for user '{{ quads_username }}'.
+              Please verify the username and password in your quads_config.yml file are correct (401 Unauthorized).
+          when: login_result.status == 401
+
+        - name: Fail with the original error for other issues
+          ansible.builtin.fail:
+            msg: "An unexpected error occurred during login: {{ login_result }}"
+          when: login_result.status is defined and login_result.status != 401
+
+    - name: Set token fact from login response
+      ansible.builtin.set_fact:
+        quads_token: "{{ login_result.json.auth_token }}"
+      changed_when: false
+
+    - name: Get list of available hosts that can be self-scheduled
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/available?can_self_schedule=true"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ quads_token }}"
+        validate_certs: false
+        status_code: 200
+      register: available_hosts
+
+    - name: Display the number of available hosts found
+      ansible.builtin.debug:
+        msg: "Found {{ available_hosts.json | length }} hosts available for self-scheduling."
+      when: available_hosts.json is sequence
+      changed_when: false
+
+    - name: Assert that available hosts were found
+      ansible.builtin.assert:
+        that:
+          - available_hosts.json is sequence
+          - available_hosts.json | length >= (num_hosts | default(1) | int)
+        fail_msg: >-
+          Could not find enough available hosts.
+          Found {{ available_hosts.json | length }}, but need {{ num_hosts | default(1) }}.
+          Please try again later.
+      changed_when: false
+
+    - name: Select the first available hosts
+      ansible.builtin.set_fact:
+        hosts_to_schedule: "{{ selected_hostnames | map('community.general.dict_kv', 'name') }}"
+      vars:
+        selected_hostnames: "{{ available_hosts.json[: (num_hosts | default(1) | int)] }}"
+      changed_when: false
+
+    - name: Attempt to create a new assignment
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/assignments/self"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ quads_token }}"
+        body_format: json
+        body:
+          description: "{{ workload_name }}"
+          owner: "{{ quads_username }}"
+          qinq: "{{ qinq | default(0) }}"
+          wipe: "{{ wipe | default('true') }}"
+        validate_certs: false
+        status_code: [201, 403]
+      register: assignment_creation_result
+
+    - name: Get existing assignment details if creation was forbidden
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/assignments?owner={{ quads_username }}&is_self_schedule=true&active=true"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ quads_token }}"
+        validate_certs: false
+        status_code: 200
+      register: existing_assignment_details
+      when: assignment_creation_result.status == 403
+
+    - name: Update assignment description if it already exists
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/assignments/{{ existing_assignment_details.json[0].id }}"
+        method: PUT
+        headers:
+          Authorization: "Bearer {{ quads_token }}"
+        body_format: json
+        body:
+          description: "{{ workload_name }}"
+        validate_certs: false
+        status_code: 200
+      when: assignment_creation_result.status == 403
+
+    - name: Set unified assignment data
+      ansible.builtin.set_fact:
+        assignment_data: "{{ assignment_creation_result.json if assignment_creation_result.status == 201 else existing_assignment_details.json[0] }}"
+      changed_when: false
+
+    - name: Set facts from unified assignment data
+      ansible.builtin.set_fact:
+        assignment_cloud: "{{ assignment_data.cloud.name }}"
+        generated_jira_ticket: "{{ assignment_data.ticket }}"
+      changed_when: false
+
+    - name: Display generated Jira ticket number
+      ansible.builtin.debug:
+        msg: "Using assignment with Jira Ticket: {{ generated_jira_ticket }}"
+      when: generated_jira_ticket is defined
+      changed_when: false
+
+    - name: Schedule each selected host
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/schedules"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ quads_token }}"
+        body_format: json
+        body:
+          cloud: "{{ assignment_cloud }}"
+          hostname: "{{ item.name }}"
+        validate_certs: false
+        status_code: [200, 201]
+      loop: "{{ hosts_to_schedule }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: schedule_results
+
+    - name: Display final success message
+      ansible.builtin.debug:
+        var: final_summary
+      vars:
+        final_summary:
+          status: "Successfully scheduled {{ hosts_to_schedule | length }} host(s)."
+          hosts: "{{ hosts_to_schedule | map(attribute='name') | list }}"
+          assignment_description: "{{ workload_name }}"
+          cloud_name: "{{ assignment_cloud }}"
+          schedule_ids: "{{ schedule_results.results | map(attribute='json.id') | list }}"
+          token_used: "{{ quads_token }}"
+      changed_when: false
+
+    - name: Generate YAML file with credentials
+      no_log: true
+      ansible.builtin.copy:
+        dest: "./quads_credentials.yml"
+        content: |
+          # QUADS API Credentials
+          # This file was generated by the quads_self_schedule.yml playbook
+          quads_username: {{ quads_username }}
+          quads_password: {{ quads_password }}
+          quads_token: {{ quads_token }}
+        mode: '0600'
+
+    - name: Generate YAML file with scheduled hosts
+      ansible.builtin.copy:
+        dest: "./scheduled_hosts_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}-{{ ansible_date_time.second }}.yml"
+        content: "{{ {'scheduled_hosts': hosts_to_schedule} | to_nice_yaml }}"
+        mode: '0644'

@@ -1,0 +1,38 @@
+---
+# QUADS Server Configuration
+# This is the FQDN or IP address of your QUADS API server.
+quads_api_server: "quads.example.com"
+
+# User Details
+# Your username and the domain part of your email address.
+quads_username: "joe"
+quads_user_domain: "example.com"
+quads_password: "mypassw0rd"
+
+# Host Selection Preferences
+# A list of server models to schedule, in order of preference.
+# The playbook will try to find hosts matching the first model, then the second, and so on.
+# To select any available model without preference, set this to "all".
+preferred_models:
+  - "r650"
+  - "r660"
+  - "r640"
+  - "r630"
+  - "r760"
+  - "r740xd"
+  - "740xd"
+  - "r750xd"
+  - "r750"
+  - "r770"
+  - "XE8640"
+  - "r720xd"
+  - "7425"
+  - "7525"
+  - "xe8640"
+  - "xe9680"
+  - "r960"
+  - "r7425"
+  - "r7525"
+  - "r7625"
+  - "7625"
+# preferred_models: "all"
