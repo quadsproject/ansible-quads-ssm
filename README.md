@@ -75,7 +75,7 @@ ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -e "wipe=false"
 ```
 
-## Schedule a Host with QINQ 1 VLAN Mode
+### Schedule a Host with QINQ 1 VLAN Mode
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -e "qinq='1'"
 ```
