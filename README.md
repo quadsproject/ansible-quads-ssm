@@ -1,5 +1,7 @@
 # Ansible QUADS Self-Scheduler
 
+[![GHA](https://github.com/sadsfae/ansible-quads-ssm/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/sadsfae/ansible-quads-ssm/actions)
+
 This Ansible playbook automates the process of scheduling hosts on a QUADS server via its [self-scheduling REST API](https://github.com/redhat-performance/quads/blob/latest/docs/quads-self-schedule.md).
 
 It handles user registration, login, host discovery, and scheduling, based on a simple configuration file and runtime parameters.
