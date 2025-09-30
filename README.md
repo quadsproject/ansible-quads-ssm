@@ -2,9 +2,13 @@
 
 [![GHA](https://github.com/sadsfae/ansible-quads-ssm/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/sadsfae/ansible-quads-ssm/actions)
 
-This Ansible playbook automates the process of scheduling hosts on a QUADS server via its [self-scheduling REST API](https://github.com/redhat-performance/quads/blob/latest/docs/quads-self-schedule.md).
+Fully automates the process of scheduling hosts on a QUADS server via its [self-scheduling REST API](https://github.com/redhat-performance/quads/blob/latest/docs/quads-self-schedule.md).
 
-It handles user registration, login, host discovery, and scheduling, based on a simple configuration file and runtime parameters.
+## Features
+
+* Performs all self-service steps:  registration, login, host discovery and scheduling
+* Allows scheduling multiple hosts or passing additional cloud values e.g. `qinq: 1` or `nowipe`
+* Generates your list of schedule hosts and login/authentication details locally
 
 ---
 ## Requirements
@@ -15,7 +19,9 @@ It handles user registration, login, host discovery, and scheduling, based on a 
 ---
 ## Configuration
 
-Before running the playbook, you must edit the included `quads_config.yml` file in the same directory. This file stores your server and user details.
+> [!IMPORTANT]
+> You must configure `quads_config.yml` first
+Before running the playbook, you must edit the included `quads_config.yml` file in the same directory. This file stores your server and user details and other preferences.
 
 ### Configuration Parameters
 
