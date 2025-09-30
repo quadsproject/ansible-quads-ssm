@@ -1,6 +1,6 @@
 # Ansible QUADS Self-Scheduler
 
-[![GHA](https://github.com/sadsfae/ansible-quads-ssm/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/sadsfae/ansible-quads-ssm/actions)
+[![GHA](https://github.com/quadsproject/ansible-quads-ssm/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/quadsproject/ansible-quads-ssm/actions)
 
 Fully automates the process of scheduling hosts on a QUADS server via its [self-scheduling REST API](https://github.com/redhat-performance/quads/blob/latest/docs/quads-self-schedule.md).
 
