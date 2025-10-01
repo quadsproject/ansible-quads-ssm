@@ -15,9 +15,9 @@
           - workload_name | length > 0
         fail_msg: >-
           Mandatory variable 'workload_name' was not provided.
-          Please run the playbook with '-e workload_name=' per the docs
-          Make sure you wrap the 'workload_name' value in single quotes
-          (See examples)
+           Please run the playbook with '-e workload_name=' per the docs.
+           Make sure you wrap the 'workload_name' value in single quotes
+           (See examples)
       changed_when: false
 
     - name: Get current time for timestamping output file
@@ -155,6 +155,7 @@
 
     - name: Set facts from unified assignment data
       ansible.builtin.set_fact:
+        assignment_id: "{{ assignment_data.id }}"
         assignment_cloud: "{{ assignment_data.cloud.name }}"
         generated_jira_ticket: "{{ assignment_data.ticket }}"
       changed_when: false
@@ -182,17 +183,31 @@
         label: "{{ item.name }}"
       register: schedule_results
 
+    - name: Set command variables for output
+      ansible.builtin.set_fact:
+        check_status_command: "curl -s https://{{ quads_api_server }}/api/v3/assignments/{{ assignment_id }} | jq '.validated'"
+        terminate_command: >-
+          curl -s -k -X POST -H 'Authorization: Bearer {{ quads_token }}'
+          https://{{ quads_api_server }}/api/v3/assignments/terminate/{{ assignment_id }} | jq
+      changed_when: false
+
     - name: Display final success message
       ansible.builtin.debug:
         var: final_summary
       vars:
         final_summary:
           status: "Successfully scheduled {{ hosts_to_schedule | length }} host(s)."
-          hosts: "{{ hosts_to_schedule | map(attribute='name') | list }}"
+          check_status_command: "{{ check_status_command }}"
+          terminate_command: "{{ terminate_command }}"
+          host_schedules: >-
+            {%- set schedules = [] -%}
+            {%- for result in schedule_results.results -%}
+              {%- set _ = schedules.append({'host': result.item.name, 'schedule_id': result.json.id}) -%}
+            {%- endfor -%}
+            {{ schedules }}
+          assignment_id: "{{ assignment_id }}"
           assignment_description: "{{ workload_name }}"
           cloud_name: "{{ assignment_cloud }}"
-          schedule_ids: "{{ schedule_results.results | map(attribute='json.id') | list }}"
-          token_used: "{{ quads_token }}"
       changed_when: false
 
     - name: Generate YAML file with credentials
@@ -211,4 +226,15 @@
       ansible.builtin.copy:
         dest: "./scheduled_hosts_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}-{{ ansible_date_time.second }}.yml"
         content: "{{ {'scheduled_hosts': hosts_to_schedule} | to_nice_yaml }}"
+        mode: '0644'
+
+    - name: Generate file with helper commands
+      ansible.builtin.copy:
+        dest: "./quads_commands_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}-{{ ansible_date_time.second }}.txt"
+        content: |
+          # Command to check if your assignment is validated and ready to use:
+          {{ check_status_command }}
+
+          # Command to terminate your assignment when you are finished:
+          {{ terminate_command }}
         mode: '0644'
