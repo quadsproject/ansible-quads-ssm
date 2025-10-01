@@ -2,14 +2,16 @@
 
 [![GHA](https://github.com/quadsproject/ansible-quads-ssm/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/quadsproject/ansible-quads-ssm/actions)
 
-Fully automates the process of scheduling hosts on a QUADS server via its [self-scheduling REST API](https://github.com/redhat-performance/quads/blob/latest/docs/quads-self-schedule.md).
+Schedule hosts on a QUADS server via its [self-scheduling REST API](https://github.com/redhat-performance/quads/blob/latest/docs/quads-self-schedule.md).
 
 ## Features
 
 * Performs all self-service steps:  registration, login, host discovery and scheduling
 * Allows scheduling multiple hosts or passing additional cloud values e.g. `qinq: 1` or `nowipe`
 * Allows setting a host model preference order, or use `all` if you don't care
-* Generates your list of schedule hosts and login/authentication details locally
+* Generates list of scheduled hosts and login/authentication details to a local file
+* Generates helper commands for querying assignment validation status and
+  terminating the assignment via it's `assignment_id`
 
 ---
 ## Requirements
@@ -83,3 +85,13 @@ ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -e "qinq='1'"
 ```
+
+## Helper Files
+
+* The following helper files are also generated to assist with the self-scheduling lifecycle:
+
+| File                                                      | Description                                                                                             |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `quads_credentials.yml`                                   | Contains your username, password, and the API token used for the session.                               |
+| `scheduled_hosts_..._YYYY-MM-DD_HH-MM-SS.yml` | A timestamped record of the hosts that were successfully scheduled.                                     |
+| `quads_commands_..._YYYY-MM-DD_HH-MM-SS.txt`  | A timestamped text file with convenient `curl` commands to check the status of and terminate your assignment. |
