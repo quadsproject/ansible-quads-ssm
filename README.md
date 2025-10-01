@@ -88,7 +88,7 @@ ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -
 
 ## Helper Files
 
-* The following helper files are also generated to assist with the self-scheduling lifecycle:
+The following helper files are also generated to assist with the self-scheduling lifecycle:
 
 | File                                                      | Description                                                                                             |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
