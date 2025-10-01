@@ -16,7 +16,7 @@ Schedule hosts on a QUADS server via its [self-scheduling REST API](https://gith
 ---
 ## Requirements
 
-* **Ansible**: Ensure Ansible and community collections (e.g. `community.general.dict_kv`) are installed from where you are running it.
+* **Ansible**: Ensure Ansible and community collections (e.g. `community.general.dict_kv`) are installed from where you are running it.  `jq` is needed for helper commands.
 ```bash
 dnf install ansible ansible-core jq
 ```
