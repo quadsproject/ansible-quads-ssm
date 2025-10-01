@@ -18,7 +18,7 @@ Schedule hosts on a QUADS server via its [self-scheduling REST API](https://gith
 
 * **Ansible**: Ensure Ansible and community collections (e.g. `community.general.dict_kv`) are installed from where you are running it.
 ```bash
-dnf install ansible ansible-core
+dnf install ansible ansible-core jq
 ```
 
 * **QUADS Server Access**: You need network access to the QUADS API server and valid user credentials.
