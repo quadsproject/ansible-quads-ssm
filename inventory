@@ -1,0 +1,4 @@
+# This file isn't used for anything
+# This will suppress any warnings about not having
+# an inventory file.
+localhost ansible_connection=local
