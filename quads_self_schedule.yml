@@ -15,9 +15,9 @@
           - workload_name | length > 0
         fail_msg: >-
           Mandatory variable 'workload_name' was not provided.
-           Please run the playbook with '-e workload_name=' per the docs.
-           Make sure you wrap the 'workload_name' value in single quotes
-           (See examples)
+          Please run the playbook with '-e workload_name=' per the docs.
+          Make sure you wrap the 'workload_name' value in single quotes
+          (See examples)
       changed_when: false
 
     - name: Get current time for timestamping output file
