@@ -94,4 +94,4 @@ The following helper files are also generated to assist with the self-scheduling
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `quads_credentials.yml`                                   | Contains your username, password, and the API token used for the session.                               |
 | `scheduled_hosts_..._YYYY-MM-DD_HH-MM-SS.yml` | A timestamped record of the hosts that were successfully scheduled.                                     |
-| `quads_commands_..._YYYY-MM-DD_HH-MM-SS.txt`  | A timestamped text file with convenient `curl` commands to check the status of and terminate your assignment. |
+| `quads_commands_..._YYYY-MM-DD_HH-MM-SS.txt`  | A timestamped text file with convenient `curl` commands to check status or terminate your assignment. |
