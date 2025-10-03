@@ -1,4 +1,3 @@
----
 - name: QUADS Self-Scheduling Workflow
   hosts: localhost
   connection: local
@@ -8,8 +7,10 @@
     - quads_config.yml
 
   pre_tasks:
-    - name: Ensure 'workload_name' is provided (if not listing servers)
-      when: not list_servers_only | default(false)
+    - name: Ensure 'workload_name' is provided (if not listing)
+      when:
+        - not list_servers_only | default(false)
+        - not list_active_only | default(false)
       ansible.builtin.assert:
         that:
           - workload_name is defined
@@ -72,6 +73,43 @@
       ansible.builtin.set_fact:
         quads_token: "{{ login_result.json.auth_token }}"
       changed_when: false
+
+    - name: List active assignments if requested
+      when: list_active_only | default(false)
+      block:
+        - name: Get list of active assignments for user
+          ansible.builtin.uri:
+            url: "{{ base_api_url }}/assignments?owner={{ quads_username }}&is_self_schedule=true&active=true"
+            method: GET
+            headers:
+              Authorization: "Bearer {{ quads_token }}"
+            validate_certs: false
+            status_code: 200
+          register: active_assignments
+
+        - name: Display confirmation of no active assignments
+          when: active_assignments.json | length == 0
+          ansible.builtin.debug:
+            msg: "No active self-scheduled assignments found for user {{ quads_username }}"
+
+        - name: Display active assignments with helper commands
+          when: active_assignments.json | length > 0
+          ansible.builtin.debug:
+            var: assignments_summary
+          vars:
+            assignments_summary: >-
+              {%- set result = [] -%}
+              {%- for asn in active_assignments.json -%}
+                {%- set check_cmd = "curl -s https://{}/api/v3/assignments/{} | jq '.validated'".format(quads_api_server, asn.id) -%}
+                {%- set term_cmd = "curl -s -k -X POST -H 'Authorization: Bearer {}' https://{}/api/v3/assignments/terminate/{} | \
+                  jq".format(quads_token, quads_api_server, asn.id) -%}
+                {%- set _ = asn.update({'check_status_command': check_cmd, 'terminate_command': term_cmd}) -%}
+                {%- set _ = result.append(asn) -%}
+              {%- endfor -%}
+              {{ result }}
+
+        - name: End playbook execution
+          ansible.builtin.meta: end_play
 
     - name: Get list of available hosts that can be self-scheduled
       ansible.builtin.uri:

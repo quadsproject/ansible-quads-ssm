@@ -9,7 +9,8 @@ Schedule hosts on a QUADS server via its [self-scheduling REST API](https://gith
 * Performs all self-service steps:  registration, login, host discovery and scheduling
 * Allows scheduling multiple hosts or passing additional cloud values e.g. `qinq: 1` or `nowipe`
 * Allows setting a host model preference order, or use `all` if you don't care
-* Allows just listing available servers or scheduling specific servers you want
+* Supports just listing available servers or scheduling specific servers you want
+* Supports listing your current, active assignments only
 * Generates list of scheduled hosts and login/authentication details to a local file
 * Generates helper commands for querying assignment validation status and terminating the assignment via it's `assignment_id`
 
@@ -65,6 +66,11 @@ preferred_models:
 
 > [!NOTE]
 > You must wrap `workload_name` description in single quotes like the below examples.
+
+### Listing Current Assignments
+```bash
+ansible-playbook quads_self_schedule.yml -e "list_active_only=true"
+```
 
 ### Listing Free Servers Only
 ```bash
