@@ -9,9 +9,9 @@ Schedule hosts on a QUADS server via its [self-scheduling REST API](https://gith
 * Performs all self-service steps:  registration, login, host discovery and scheduling
 * Allows scheduling multiple hosts or passing additional cloud values e.g. `qinq: 1` or `nowipe`
 * Allows setting a host model preference order, or use `all` if you don't care
+* Allows just listing available servers or scheduling specific servers you want
 * Generates list of scheduled hosts and login/authentication details to a local file
-* Generates helper commands for querying assignment validation status and
-  terminating the assignment via it's `assignment_id`
+* Generates helper commands for querying assignment validation status and terminating the assignment via it's `assignment_id`
 
 ---
 ## Requirements
@@ -66,6 +66,11 @@ preferred_models:
 > [!NOTE]
 > You must wrap `workload_name` description in single quotes like the below examples.
 
+### Listing Free Servers Only
+```bash
+ansible-playbook quads_self_schedule.yml -e "list_servers_only=true"
+```
+
 ### Scheduling a Single Host
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'"
@@ -74,6 +79,13 @@ ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'"
 ### Scheduling Three Hosts
 ```bash
 ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -e "num_hosts='3'"
+```
+
+### Scheduling Specific Hosts
+```bash
+ansible-playbook quads_self_schedule.yml \
+  -e '{"workload_name": "My Test Workload"}' \
+  -e "schedule_servers=host01.example.com,host2.example.com"
 ```
 
 ### Schedule a Host without Wiping the Disks
