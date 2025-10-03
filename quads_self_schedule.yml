@@ -101,7 +101,8 @@
               {%- set result = [] -%}
               {%- for asn in active_assignments.json -%}
                 {%- set check_cmd = "curl -s https://{}/api/v3/assignments/{} | jq '.validated'".format(quads_api_server, asn.id) -%}
-                {%- set term_cmd = "curl -s -k -X POST -H 'Authorization: Bearer {}' https://{}/api/v3/assignments/terminate/{} | jq".format(quads_token, quads_api_server, asn.id) -%}
+                {%- set term_cmd = "curl -s -k -X POST -H 'Authorization: Bearer {}' https://{}/api/v3/assignments/terminate/{} | \
+                  jq".format(quads_token, quads_api_server, asn.id) -%}
                 {%- set _ = asn.update({'check_status_command': check_cmd, 'terminate_command': term_cmd}) -%}
                 {%- set _ = result.append(asn) -%}
               {%- endfor -%}
