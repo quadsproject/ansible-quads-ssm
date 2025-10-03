@@ -8,13 +8,13 @@
     - quads_config.yml
 
   pre_tasks:
-    - name: Ensure 'workload_name' is provided at runtime
+    - name: Ensure 'workload_name' is provided (if not listing servers)
+      when: not list_servers_only | default(false)
       ansible.builtin.assert:
         that:
           - workload_name is defined
           - workload_name | length > 0
         fail_msg: >-
-          Mandatory variable 'workload_name' was not provided.
           Please run the playbook with '-e workload_name=' per the docs.
           Make sure you wrap the 'workload_name' value in single quotes.
           (See examples)
@@ -63,7 +63,6 @@
               Login failed for user '{{ quads_username }}'.
               Please verify the username and password in your quads_config.yml file are correct (401 Unauthorized).
           when: login_result.status == 401
-
         - name: Fail with the original error for other issues
           ansible.builtin.fail:
             msg: "An unexpected error occurred during login: {{ login_result }}"
@@ -84,29 +83,44 @@
         status_code: 200
       register: available_hosts
 
-    - name: Display the number of available hosts found
-      ansible.builtin.debug:
-        msg: "Found {{ available_hosts.json | length }} hosts available for self-scheduling."
-      when: available_hosts.json is sequence
-      changed_when: false
+    - name: Display available server hostnames and exit
+      when: list_servers_only | default(false)
+      block:
+        - name: Print list of available servers
+          ansible.builtin.debug:
+            msg: "{{ available_hosts.json }}"
+        - name: End playbook execution
+          ansible.builtin.meta: end_play
 
-    - name: Assert that available hosts were found
-      ansible.builtin.assert:
-        that:
-          - available_hosts.json is sequence
-          - available_hosts.json | length >= (num_hosts | default(1) | int)
-        fail_msg: >-
-          Could not find enough available hosts.
-          Found {{ available_hosts.json | length }}, but need {{ num_hosts | default(1) }}.
-          Please try again later.
-      changed_when: false
-
-    - name: Select the first available hosts
+    - name: Prepare user-specified hosts for scheduling
+      when: schedule_servers is defined
       ansible.builtin.set_fact:
-        hosts_to_schedule: "{{ selected_hostnames | map('community.general.dict_kv', 'name') }}"
-      vars:
-        selected_hostnames: "{{ available_hosts.json[: (num_hosts | default(1) | int)] }}"
-      changed_when: false
+        hosts_to_schedule: "{{ schedule_servers.split(',') | map('trim') | map('community.general.dict_kv', 'name') }}"
+
+    - name: Auto-select hosts when none are specified
+      when: schedule_servers is not defined
+      block:
+        - name: Display the number of available hosts found
+          ansible.builtin.debug:
+            msg: "Found {{ available_hosts.json | length }} hosts available for self-scheduling."
+          when: available_hosts.json is sequence
+          changed_when: false
+        - name: Assert that available hosts were found
+          ansible.builtin.assert:
+            that:
+              - available_hosts.json is sequence
+              - available_hosts.json | length >= (num_hosts | default(1) | int)
+            fail_msg: >-
+              Could not find enough available hosts.
+              Found {{ available_hosts.json | length }}, but need {{ num_hosts | default(1) }}.
+              Please try again later.
+          changed_when: false
+        - name: Select the first available hosts
+          ansible.builtin.set_fact:
+            hosts_to_schedule: "{{ selected_hostnames | map('community.general.dict_kv', 'name') }}"
+          vars:
+            selected_hostnames: "{{ available_hosts.json[: (num_hosts | default(1) | int)] }}"
+          changed_when: false
 
     - name: Attempt to create a new assignment
       ansible.builtin.uri:
@@ -125,6 +139,7 @@
       register: assignment_creation_result
 
     - name: Get existing assignment details if creation was forbidden
+      when: assignment_creation_result.status == 403
       ansible.builtin.uri:
         url: "{{ base_api_url }}/assignments?owner={{ quads_username }}&is_self_schedule=true&active=true"
         method: GET
@@ -133,9 +148,9 @@
         validate_certs: false
         status_code: 200
       register: existing_assignment_details
-      when: assignment_creation_result.status == 403
 
     - name: Update assignment description if it already exists
+      when: assignment_creation_result.status == 403
       ansible.builtin.uri:
         url: "{{ base_api_url }}/assignments/{{ existing_assignment_details.json[0].id }}"
         method: PUT
@@ -146,7 +161,6 @@
           description: "{{ workload_name }}"
         validate_certs: false
         status_code: 200
-      when: assignment_creation_result.status == 403
 
     - name: Set unified assignment data
       ansible.builtin.set_fact:
@@ -161,9 +175,9 @@
       changed_when: false
 
     - name: Display generated Jira ticket number
+      when: generated_jira_ticket is defined
       ansible.builtin.debug:
         msg: "Using assignment with Jira Ticket: {{ generated_jira_ticket }}"
-      when: generated_jira_ticket is defined
       changed_when: false
 
     - name: Schedule each selected host
