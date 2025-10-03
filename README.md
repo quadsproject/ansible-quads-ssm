@@ -84,7 +84,7 @@ ansible-playbook quads_self_schedule.yml -e "workload_name='My Test Workload'" -
 ### Scheduling Specific Hosts
 ```bash
 ansible-playbook quads_self_schedule.yml \
-  -e '{"workload_name": "My Test Workload"}' \
+  -e "workload_name='My Test Workload'" \
   -e "schedule_servers=host01.example.com,host2.example.com"
 ```
 
