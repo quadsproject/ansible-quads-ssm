@@ -101,8 +101,10 @@
               {%- set result = [] -%}
               {%- for asn in active_assignments.json -%}
                 {%- set check_cmd = "curl -s https://{}/api/v3/assignments/{} | jq '.validated'".format(quads_api_server, asn.id) -%}
-                {%- set term_cmd = "curl -s -k -X POST -H 'Authorization: Bearer {}' https://{}/api/v3/assignments/terminate/{} | \
-                  jq".format(quads_token, quads_api_server, asn.id) -%}
+                {%- set login_cmd = "curl -s -k -X POST -u '{}:{}' https://{}/api/v3/login/ | jq -r '.auth_token'".format(
+                  quads_user_email, quads_password, quads_api_server) -%}
+                {%- set term_cmd = 'curl -s -k -X POST -H "Authorization: Bearer $({login})" https://{server}/api/v3/assignments/terminate/{id} | jq'.format(
+                  login=login_cmd, server=quads_api_server, id=asn.id) -%}
                 {%- set _ = asn.update({'check_status_command': check_cmd, 'terminate_command': term_cmd}) -%}
                 {%- set _ = result.append(asn) -%}
               {%- endfor -%}
@@ -239,7 +241,8 @@
       ansible.builtin.set_fact:
         check_status_command: "curl -s https://{{ quads_api_server }}/api/v3/assignments/{{ assignment_id }} | jq '.validated'"
         terminate_command: >-
-          curl -s -k -X POST -H 'Authorization: Bearer {{ quads_token }}'
+          curl -s -k -X POST -H "Authorization: Bearer $(curl -s -k -X POST -u '{{ quads_user_email }}:{{ quads_password }}'
+          https://{{ quads_api_server }}/api/v3/login/ | jq -r '.auth_token')"
           https://{{ quads_api_server }}/api/v3/assignments/terminate/{{ assignment_id }} | jq
       changed_when: false
 
