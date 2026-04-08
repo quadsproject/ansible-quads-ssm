@@ -123,6 +123,25 @@
         status_code: 200
       register: available_hosts
 
+    - name: Get available hosts per preferred model
+      when:
+        - schedule_servers is not defined
+        - not list_servers_only | default(false)
+        - not list_active_only | default(false)
+        - preferred_models is defined
+        - preferred_models is not string
+      ansible.builtin.uri:
+        url: "{{ base_api_url }}/available?can_self_schedule=true&model={{ item | upper }}"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ quads_token }}"
+        validate_certs: false
+        status_code: 200
+      loop: "{{ preferred_models if preferred_models is not string else [] }}"
+      loop_control:
+        label: "{{ item }}"
+      register: available_by_model
+
     - name: Display available server hostnames and exit
       when: list_servers_only | default(false)
       block:
@@ -145,21 +164,78 @@
             msg: "Found {{ available_hosts.json | length }} hosts available for self-scheduling."
           when: available_hosts.json is sequence
           changed_when: false
-        - name: Assert that available hosts were found
-          ansible.builtin.assert:
-            that:
-              - available_hosts.json is sequence
-              - available_hosts.json | length >= (num_hosts | default(1) | int)
-            fail_msg: >-
-              Could not find enough available hosts.
-              Found {{ available_hosts.json | length }}, but need {{ num_hosts | default(1) }}.
-              Please try again later.
+
+        - name: Select hosts by model preference order
+          when:
+            - preferred_models is defined
+            - preferred_models is not string
+            - available_by_model is defined
+          ansible.builtin.set_fact:
+            hosts_to_schedule: "{{ selected_json | from_json }}"
+          vars:
+            needed: "{{ num_hosts | default(1) | int }}"
+            selected_json: >-
+              {%- set result = [] -%}
+              {%- for model_result in available_by_model.results -%}
+                {%- set hosts = model_result.json | default([]) -%}
+                {%- if hosts is sequence and not hosts is string -%}
+                  {%- if result | length < needed | int -%}
+                    {%- for host in hosts -%}
+                      {%- set existing_hosts = result | map(attribute='name') | list -%}
+                      {%- if result | length < needed | int and host not in existing_hosts -%}
+                        {%- set _ = result.append({'name': host}) -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ result | to_json }}
           changed_when: false
-        - name: Select the first available hosts
+
+        - name: Display model selection results
+          when:
+            - preferred_models is defined
+            - preferred_models is not string
+            - hosts_to_schedule is defined
+          vars:
+            selected_hosts_info: >-
+              {%- set lines = [] -%}
+              {%- for model_result in available_by_model.results -%}
+                {%- set hosts = model_result.json | default([]) -%}
+                {%- if hosts is sequence and not hosts is string -%}
+                  {%- for h in hosts_to_schedule -%}
+                    {%- if h.name in hosts -%}
+                      {%- set _ = lines.append(h.name ~ ' (model: ' ~ model_result.item ~ ')') -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ lines | to_json }}
+          ansible.builtin.debug:
+            msg: "{{ ['Selected ' ~ hosts_to_schedule | length ~ ' host(s) by model preference:'] + (selected_hosts_info | from_json) }}"
+          changed_when: false
+
+        - name: Select first available hosts (no model preference)
+          when: preferred_models is not defined or preferred_models is string
           ansible.builtin.set_fact:
             hosts_to_schedule: "{{ selected_hostnames | map('community.general.dict_kv', 'name') }}"
           vars:
             selected_hostnames: "{{ available_hosts.json[: (num_hosts | default(1) | int)] }}"
+          changed_when: false
+
+        - name: Assert that enough hosts were selected
+          ansible.builtin.assert:
+            that:
+              - hosts_to_schedule is defined
+              - hosts_to_schedule | length >= (num_hosts | default(1) | int)
+            fail_msg: >-
+              Could not find enough available hosts matching preferences.
+              Selected {{ hosts_to_schedule | length | default(0) }},
+              but need {{ num_hosts | default(1) }}.
+              {% if preferred_models is defined and preferred_models is not string %}
+              Preferred models tried: {{ preferred_models | join(', ') }}.
+              {% endif %}
+              Please try again later or adjust preferred_models.
           changed_when: false
 
     - name: Attempt to create a new assignment
