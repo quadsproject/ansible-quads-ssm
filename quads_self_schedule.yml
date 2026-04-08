@@ -171,21 +171,25 @@
             - preferred_models is not string
             - available_by_model is defined
           ansible.builtin.set_fact:
-            hosts_to_schedule: "{{ selected | map('community.general.dict_kv', 'name') }}"
+            hosts_to_schedule: "{{ selected_json | from_json }}"
           vars:
             needed: "{{ num_hosts | default(1) | int }}"
-            selected: >-
+            selected_json: >-
               {%- set result = [] -%}
               {%- for model_result in available_by_model.results -%}
-                {%- if result | length < needed | int -%}
-                  {%- for host in model_result.json -%}
-                    {%- if result | length < needed | int and host not in result -%}
-                      {%- set _ = result.append(host) -%}
-                    {%- endif -%}
-                  {%- endfor -%}
+                {%- set hosts = model_result.json | default([]) -%}
+                {%- if hosts is sequence and not hosts is string -%}
+                  {%- if result | length < needed | int -%}
+                    {%- for host in hosts -%}
+                      {%- set existing_hosts = result | map(attribute='name') | list -%}
+                      {%- if result | length < needed | int and host not in existing_hosts -%}
+                        {%- set _ = result.append({'name': host}) -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                  {%- endif -%}
                 {%- endif -%}
               {%- endfor -%}
-              {{ result }}
+              {{ result | to_json }}
           changed_when: false
 
         - name: Display model selection results
@@ -197,15 +201,18 @@
             selected_hosts_info: >-
               {%- set lines = [] -%}
               {%- for model_result in available_by_model.results -%}
-                {%- for h in hosts_to_schedule -%}
-                  {%- if h.name in model_result.json -%}
-                    {%- set _ = lines.append(h.name ~ ' (model: ' ~ model_result.item ~ ')') -%}
-                  {%- endif -%}
-                {%- endfor -%}
+                {%- set hosts = model_result.json | default([]) -%}
+                {%- if hosts is sequence and not hosts is string -%}
+                  {%- for h in hosts_to_schedule -%}
+                    {%- if h.name in hosts -%}
+                      {%- set _ = lines.append(h.name ~ ' (model: ' ~ model_result.item ~ ')') -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                {%- endif -%}
               {%- endfor -%}
-              {{ lines }}
+              {{ lines | to_json }}
           ansible.builtin.debug:
-            msg: "{{ ['Selected ' ~ hosts_to_schedule | length ~ ' host(s) by model preference:'] + selected_hosts_info }}"
+            msg: "{{ ['Selected ' ~ hosts_to_schedule | length ~ ' host(s) by model preference:'] + (selected_hosts_info | from_json) }}"
           changed_when: false
 
         - name: Select first available hosts (no model preference)
