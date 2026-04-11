@@ -65,14 +65,15 @@
         - preferred_models is iterable
         - preferred_models is not mapping
         - preferred_models | length > 0
-        - preferred_models | unique | length < (preferred_models | length)
+        - preferred_models | map('upper') | unique | length < (preferred_models | length)
       ansible.builtin.debug:
         msg: >-
-          WARNING: Duplicate models detected in preferred_models list.
-          This will cause redundant API calls.
+          WARNING: Duplicate models detected in preferred_models list (case-insensitive).
+          This will cause redundant API calls since models are converted to uppercase.
           Duplicates: {%- set duplicates = [] -%}
-          {%- for item in preferred_models | unique -%}
-          {%- if preferred_models.count(item) > 1 -%}
+          {%- set upper_models = preferred_models | map('upper') | list -%}
+          {%- for item in upper_models | unique -%}
+          {%- if upper_models.count(item) > 1 -%}
           {%- set _ = duplicates.append(item) -%}
           {%- endif -%}
           {%- endfor -%}
@@ -116,16 +117,26 @@
             status_code: 200
           register: login_result
       rescue:
-        - name: Provide a clear error message for login failure
+        - name: Provide a clear error message for authentication failure
           ansible.builtin.fail:
             msg: >-
               Login failed for user '{{ quads_username }}'.
               Please verify the username and password in your quads_config.yml file are correct (401 Unauthorized).
-          when: login_result.status == 401
-        - name: Fail with the original error for other issues
+          when: login_result.status is defined and login_result.status == 401
+        - name: Provide error message for HTTP errors
           ansible.builtin.fail:
-            msg: "An unexpected error occurred during login: {{ login_result }}"
+            msg: >-
+              Login failed with HTTP status {{ login_result.status }}.
+              Error: {{ login_result.msg | default('Unknown error') }}
           when: login_result.status is defined and login_result.status != 401
+        - name: Provide error message for network/connectivity issues
+          ansible.builtin.fail:
+            msg: >-
+              Login failed - could not reach QUADS server at {{ base_api_url }}/login/
+              Error: {{ login_result.msg | default('Connection failed') }}
+              This may be a network connectivity issue, DNS failure, or the server may be down.
+              Please verify the quads_api_server setting in quads_config.yml is correct.
+          when: login_result.status is not defined
 
     - name: Set token fact from login response
       ansible.builtin.set_fact:
@@ -325,6 +336,18 @@
         validate_certs: false
         status_code: 200
       register: existing_assignment_details
+
+    - name: Verify existing assignment was found
+      when: assignment_creation_result.status == 403
+      ansible.builtin.assert:
+        that:
+          - existing_assignment_details.json is defined
+          - existing_assignment_details.json | length > 0
+        fail_msg: >-
+          Assignment creation was forbidden (403), but no existing active assignment was found.
+          This may indicate a permissions issue or server misconfiguration.
+          Please contact your QUADS administrator.
+      changed_when: false
 
     - name: Update assignment description if it already exists
       when: assignment_creation_result.status == 403
