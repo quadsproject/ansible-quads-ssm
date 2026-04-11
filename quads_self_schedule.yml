@@ -21,6 +21,65 @@
           (See examples)
       changed_when: false
 
+    - name: Validate 'num_hosts' if provided
+      when: num_hosts is defined
+      ansible.builtin.assert:
+        that:
+          - num_hosts | int > 0
+        fail_msg: >-
+          'num_hosts' must be a positive integer greater than 0.
+          Got: {{ num_hosts }}
+      changed_when: false
+
+    - name: Validate 'preferred_models' type if provided
+      when:
+        - preferred_models is defined
+        - preferred_models is not string
+      ansible.builtin.assert:
+        that:
+          - preferred_models is iterable
+          - preferred_models is not mapping
+        fail_msg: >-
+          'preferred_models' must be either a list of model names or the string "all".
+          Got type: {{ preferred_models | type_debug }}
+      changed_when: false
+
+    - name: Validate 'preferred_models' is not empty if provided as a list
+      when:
+        - preferred_models is defined
+        - preferred_models is not string
+        - preferred_models is iterable
+        - preferred_models is not mapping
+      ansible.builtin.assert:
+        that:
+          - preferred_models | length > 0
+        fail_msg: >-
+          'preferred_models' is defined as an empty list.
+          Either provide model names in the list or set to "all" for any model.
+      changed_when: false
+
+    - name: Warn about duplicate models in preferred_models
+      when:
+        - preferred_models is defined
+        - preferred_models is not string
+        - preferred_models is iterable
+        - preferred_models is not mapping
+        - preferred_models | length > 0
+        - preferred_models | map('upper') | unique | length < (preferred_models | length)
+      ansible.builtin.debug:
+        msg: >-
+          WARNING: Duplicate models detected in preferred_models list (case-insensitive).
+          This will cause redundant API calls since models are converted to uppercase.
+          Duplicates: {%- set duplicates = [] -%}
+          {%- set upper_models = preferred_models | map('upper') | list -%}
+          {%- for item in upper_models | unique -%}
+          {%- if upper_models.count(item) > 1 -%}
+          {%- set _ = duplicates.append(item) -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ duplicates | join(', ') }}
+      changed_when: false
+
     - name: Get current time for timestamping output file
       ansible.builtin.setup:
         filter: ansible_date_time
@@ -58,16 +117,26 @@
             status_code: 200
           register: login_result
       rescue:
-        - name: Provide a clear error message for login failure
+        - name: Provide a clear error message for authentication failure
           ansible.builtin.fail:
             msg: >-
               Login failed for user '{{ quads_username }}'.
               Please verify the username and password in your quads_config.yml file are correct (401 Unauthorized).
-          when: login_result.status == 401
-        - name: Fail with the original error for other issues
+          when: login_result.status is defined and login_result.status == 401
+        - name: Provide error message for HTTP errors
           ansible.builtin.fail:
-            msg: "An unexpected error occurred during login: {{ login_result }}"
+            msg: >-
+              Login failed with HTTP status {{ login_result.status }}.
+              Error: {{ login_result.msg | default('Unknown error') }}
           when: login_result.status is defined and login_result.status != 401
+        - name: Provide error message for network/connectivity issues
+          ansible.builtin.fail:
+            msg: >-
+              Login failed - could not reach QUADS server at {{ base_api_url }}/login/
+              Error: {{ login_result.msg | default('Connection failed') }}
+              This may be a network connectivity issue, DNS failure, or the server may be down.
+              Please verify the quads_api_server setting in quads_config.yml is correct.
+          when: login_result.status is not defined
 
     - name: Set token fact from login response
       ansible.builtin.set_fact:
@@ -130,6 +199,8 @@
         - not list_active_only | default(false)
         - preferred_models is defined
         - preferred_models is not string
+        - preferred_models is iterable
+        - preferred_models is not mapping
       ansible.builtin.uri:
         url: "{{ base_api_url }}/available?can_self_schedule=true&model={{ item | upper }}"
         method: GET
@@ -137,7 +208,7 @@
           Authorization: "Bearer {{ quads_token }}"
         validate_certs: false
         status_code: 200
-      loop: "{{ preferred_models if preferred_models is not string else [] }}"
+      loop: "{{ preferred_models if (preferred_models is iterable and preferred_models is not string and preferred_models is not mapping) else [] }}"
       loop_control:
         label: "{{ item }}"
       register: available_by_model
@@ -197,6 +268,7 @@
             - preferred_models is defined
             - preferred_models is not string
             - hosts_to_schedule is defined
+            - available_by_model is defined
           vars:
             selected_hosts_info: >-
               {%- set lines = [] -%}
@@ -264,6 +336,18 @@
         validate_certs: false
         status_code: 200
       register: existing_assignment_details
+
+    - name: Verify existing assignment was found
+      when: assignment_creation_result.status == 403
+      ansible.builtin.assert:
+        that:
+          - existing_assignment_details.json is defined
+          - existing_assignment_details.json | length > 0
+        fail_msg: >-
+          Assignment creation was forbidden (403), but no existing active assignment was found.
+          This may indicate a permissions issue or server misconfiguration.
+          Please contact your QUADS administrator.
+      changed_when: false
 
     - name: Update assignment description if it already exists
       when: assignment_creation_result.status == 403
