@@ -14,7 +14,7 @@
       ansible.builtin.assert:
         that:
           - workload_name is defined
-          - workload_name | length > 0
+          - workload_name | trim | length > 0
         fail_msg: >-
           Please run the playbook with '-e workload_name=' per the docs.
           Make sure you wrap the 'workload_name' value in single quotes.
@@ -169,11 +169,11 @@
             assignments_summary: >-
               {%- set result = [] -%}
               {%- for asn in active_assignments.json -%}
-                {%- set check_cmd = "curl -s https://{}/api/v3/assignments/{} | jq '.validated'".format(quads_api_server, asn.id) -%}
-                {%- set login_cmd = "curl -s -k -X POST -u '{}:{}' https://{}/api/v3/login/ | jq -r '.auth_token'".format(
+                {%- set check_cmd = "curl -s https://%s/api/v3/assignments/%s | jq '.validated'" | format(quads_api_server, asn.id) -%}
+                {%- set login_cmd = "curl -s -k -X POST -u '%s:%s' https://%s/api/v3/login/ | jq -r '.auth_token'" | format(
                   quads_user_email, quads_password, quads_api_server) -%}
-                {%- set term_cmd = 'curl -s -k -X POST -H "Authorization: Bearer $({login})" https://{server}/api/v3/assignments/terminate/{id} | jq'.format(
-                  login=login_cmd, server=quads_api_server, id=asn.id) -%}
+                {%- set term_cmd = 'curl -s -k -X POST -H "Authorization: Bearer $(%s)" https://%s/api/v3/assignments/terminate/%s | jq' | format(
+                  login_cmd, quads_api_server, asn.id) -%}
                 {%- set _ = asn.update({'check_status_command': check_cmd, 'terminate_command': term_cmd}) -%}
                 {%- set _ = result.append(asn) -%}
               {%- endfor -%}
@@ -225,7 +225,7 @@
     - name: Prepare user-specified hosts for scheduling
       when: schedule_servers is defined
       ansible.builtin.set_fact:
-        hosts_to_schedule: "{{ schedule_servers.split(',') | map('trim') | map('community.general.dict_kv', 'name') }}"
+        hosts_to_schedule: "{{ schedule_servers.split(',') | map('trim') | map('community.general.dict_kv', 'name') | list }}"
 
     - name: Auto-select hosts when none are specified
       when: schedule_servers is not defined
@@ -247,7 +247,7 @@
             needed: "{{ num_hosts | default(1) | int }}"
             selected_json: >-
               {%- set result = [] -%}
-              {%- for model_result in available_by_model.results -%}
+              {%- for model_result in available_by_model.results | default([]) -%}
                 {%- set hosts = model_result.json | default([]) -%}
                 {%- if hosts is sequence and not hosts is string -%}
                   {%- if result | length < needed | int -%}
@@ -272,7 +272,7 @@
           vars:
             selected_hosts_info: >-
               {%- set lines = [] -%}
-              {%- for model_result in available_by_model.results -%}
+              {%- for model_result in available_by_model.results | default([]) -%}
                 {%- set hosts = model_result.json | default([]) -%}
                 {%- if hosts is sequence and not hosts is string -%}
                   {%- for h in hosts_to_schedule -%}
@@ -290,7 +290,7 @@
         - name: Select first available hosts (no model preference)
           when: preferred_models is not defined or preferred_models is string
           ansible.builtin.set_fact:
-            hosts_to_schedule: "{{ selected_hostnames | map('community.general.dict_kv', 'name') }}"
+            hosts_to_schedule: "{{ selected_hostnames | map('community.general.dict_kv', 'name') | list }}"
           vars:
             selected_hostnames: "{{ available_hosts.json[: (num_hosts | default(1) | int)] }}"
           changed_when: false
@@ -370,12 +370,12 @@
     - name: Set facts from unified assignment data
       ansible.builtin.set_fact:
         assignment_id: "{{ assignment_data.id }}"
-        assignment_cloud: "{{ assignment_data.cloud.name }}"
-        generated_jira_ticket: "{{ assignment_data.ticket }}"
+        assignment_cloud: "{{ assignment_data.cloud.name | default('unknown') }}"
+        generated_jira_ticket: "{{ assignment_data.ticket | default('None') }}"
       changed_when: false
 
     - name: Display generated Jira ticket number
-      when: generated_jira_ticket is defined
+      when: generated_jira_ticket != 'None'
       ansible.builtin.debug:
         msg: "Using assignment with Jira Ticket: {{ generated_jira_ticket }}"
       changed_when: false
@@ -435,13 +435,13 @@
           quads_username: {{ quads_username }}
           quads_password: {{ quads_password }}
           quads_token: {{ quads_token }}
-        mode: '0600'
+        mode: "0600"
 
     - name: Generate YAML file with scheduled hosts
       ansible.builtin.copy:
         dest: "./scheduled_hosts_{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}-{{ ansible_date_time.second }}.yml"
         content: "{{ {'scheduled_hosts': hosts_to_schedule} | to_nice_yaml }}"
-        mode: '0644'
+        mode: "0644"
 
     - name: Generate file with helper commands
       ansible.builtin.copy:
@@ -452,4 +452,4 @@
 
           # Command to terminate your assignment when you are finished:
           {{ terminate_command }}
-        mode: '0644'
+        mode: "0644"
